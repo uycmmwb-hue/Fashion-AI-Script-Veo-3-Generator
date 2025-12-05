@@ -1,28 +1,39 @@
 
-import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AppConfig, VisionAnalysis, Script, GeneratedVeoData } from "../types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-// --- Helper: File to Base64 ---
-export const fileToGenerativePart = async (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      // Remove data url prefix (e.g. "data:image/jpeg;base64,")
-      const base64 = base64String.split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+const callTextAI = async (finalPrompt) => {
+  const res = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: finalPrompt }),
   });
+
+  const data = await res.json();
+  return data;
+};
 };
 
 // --- 1. Vision Analysis ---
 export const analyzeProductImage = async (base64Image: string): Promise<VisionAnalysis> => {
-  const ai = getAI();
-  
+  const res = await fetch("/api/vision", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base64Image }),
+  });
+
+  const data = await res.json();
+
+  if (!data) throw new Error("Vision API returned no response");
+  if (data.error) throw new Error(data.error);
+
+  // Gemini API returns output in nested structure under candidates
+  try {
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return JSON.parse(text);
+  } catch {
+    return data;
+  }
+}; 
   const prompt = `
     Phân tích hình ảnh sản phẩm thời trang này để viết kịch bản video marketing.
     Trích xuất các chi tiết sau dưới dạng JSON (Giá trị trả về phải bằng Tiếng Việt):
@@ -75,7 +86,18 @@ export const analyzeProductImage = async (base64Image: string): Promise<VisionAn
 
 // --- 2. Generate Scripts ---
 export const generateScripts = async (config: AppConfig): Promise<Script[]> => {
-  const ai = getAI();
+  const finalPrompt = `
+    Đóng vai một Đạo diễn Video Thời trang chuyên nghiệp...
+    ${JSON.stringify(config)}
+  `;
+
+  const data = await callTextAI(finalPrompt);
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No script returned");
+
+  return JSON.parse(text);
+};
   
   // Logic xử lý nghiêm ngặt cho yêu cầu Không lời thoại
   const isNoDialogue = config.videoStyle.includes('Không lời thoại');
@@ -85,7 +107,7 @@ export const generateScripts = async (config: AppConfig): Promise<Script[]> => {
        - Tuyệt đối KHÔNG viết lời thoại cho nhân vật. 
        - Trường 'dialogue_or_text' CHỈ ĐƯỢC chứa nội dung chữ hiển thị (Text Overlay) hoặc ghi chú về âm nhạc/âm thanh.
        - Tập trung mô tả hành động và biểu cảm.`
-    : `YÊU CẦU: Viết lời thoại tự nhiên, hấp dẫn, phù hợp với giọng đọc ${config.accent}.`;
+    : `YÊU CẦU: Không viết lời thoại ${config.accent}.`;
 
   const prompt = `
     Đóng vai một Đạo diễn Video Thời trang chuyên nghiệp.
@@ -156,7 +178,19 @@ export const generateScripts = async (config: AppConfig): Promise<Script[]> => {
 
 // --- 3. Generate Veo-3 Prompt ---
 export const generateVeoPrompt = async (script: Script, config: AppConfig): Promise<GeneratedVeoData> => {
-  const ai = getAI();
+  const finalPrompt = `
+    Generate Veo prompts with JSON format...
+    Script: ${JSON.stringify(script)}
+    Config: ${JSON.stringify(config)}
+  `;
+
+  const data = await callTextAI(finalPrompt);
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No Veo prompt generated");
+
+  return JSON.parse(text);
+};
   
   const prompt = `
     Dựa trên kịch bản video đã chọn gồm ${script.scenes.length} cảnh, hãy tạo ${script.scenes.length} JSON prompt riêng biệt tương ứng với từng phân cảnh (scene) để tạo video bằng model Veo-3.

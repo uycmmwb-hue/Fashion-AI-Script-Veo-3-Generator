@@ -3,9 +3,9 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AppConfig, VisionAnalysis, Script, GeneratedVeoData } from "../types";
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-console.log("👉 Gemini KEY Loaded:", import.meta.env.VITE_GEMINI_API_KEY);
+console.log("👉 Gemini KEY Loaded:", import.process.env.VITE_GEMINI_API_KEY);
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(import.process.env.VITE_GEMINI_API_KEY);
 
 export default genAI;
 
